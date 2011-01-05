@@ -8,89 +8,62 @@
 
 package com.yahoo.platform.yui.compressor;
 
-import jargs.gnu.CmdLineParser;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
+import java.io.Reader;
+import java.io.Writer;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.kohsuke.args4j.CmdLineException;
+import org.kohsuke.args4j.CmdLineParser;
 import org.mozilla.javascript.ErrorReporter;
 import org.mozilla.javascript.EvaluatorException;
 
-import java.io.*;
-import java.nio.charset.Charset;
+import com.yahoo.platform.yui.compressor.Config.TYPE;
 
 public class YUICompressor {
 
 	public static void main(String args[]) {
 
-		CmdLineParser parser = new CmdLineParser();
-		CmdLineParser.Option typeOpt = parser.addStringOption("type");
-		CmdLineParser.Option verboseOpt = parser.addBooleanOption('v', "verbose");
-		CmdLineParser.Option nomungeOpt = parser.addBooleanOption("nomunge");
-		CmdLineParser.Option linebreakOpt = parser.addStringOption("line-break");
-		CmdLineParser.Option preserveSemiOpt = parser.addBooleanOption("preserve-semi");
-		CmdLineParser.Option disableOptimizationsOpt = parser.addBooleanOption("disable-optimizations");
-		CmdLineParser.Option helpOpt = parser.addBooleanOption('h', "help");
-		CmdLineParser.Option charsetOpt = parser.addStringOption("charset");
-		CmdLineParser.Option outputFilenameOpt = parser.addStringOption('o', "output");
+		Config cfg = new Config();
+		CmdLineParser parser = new CmdLineParser(cfg);
 
 		Reader in = null;
 		Writer out = null;
 
 		try {
 
-			parser.parse(args);
+			//parse the arguments
+			parser.parseArgument(args);
 
-			Boolean help = (Boolean) parser.getOptionValue(helpOpt);
-			if (help != null && help.booleanValue()) {
-				usage();
-				System.exit(0);
+
+			boolean verbose = cfg.isVerbose();
+
+			String charset = cfg.getCharset();
+			if (verbose) {
+				System.err.println("\n[INFO] Using charset " + charset);
 			}
 
-			boolean verbose = parser.getOptionValue(verboseOpt) != null;
+			int linebreakpos = cfg.getLineBreak();
 
-			String charset = (String) parser.getOptionValue(charsetOpt);
-			if (charset == null || !Charset.isSupported(charset)) {
-				// charset = System.getProperty("file.encoding");
-				// if (charset == null) {
-				//     charset = "UTF-8";
-				// }
+			Config.TYPE type = cfg.getType();
 
-				// UTF-8 seems to be a better choice than what the system is reporting
-				charset = "UTF-8";
-
-
-				if (verbose) {
-					System.err.println("\n[INFO] Using charset " + charset);
-				}
-			}
-
-			int linebreakpos = -1;
-			String linebreakstr = (String) parser.getOptionValue(linebreakOpt);
-			if (linebreakstr != null) {
-				try {
-					linebreakpos = Integer.parseInt(linebreakstr, 10);
-				} catch (NumberFormatException e) {
-					usage();
-					System.exit(1);
-				}
-			}
-
-			String type = (String) parser.getOptionValue(typeOpt);
-			if (type != null && !type.equalsIgnoreCase("js") && !type.equalsIgnoreCase("css")) {
-				usage();
-				System.exit(1);
-			}
-
-			String[] fileArgs = parser.getRemainingArgs();
-			java.util.List<String> files = java.util.Arrays.asList(fileArgs);
+			List<String> files = cfg.getArguments();
 			if (files.isEmpty()) {
-				files = new java.util.ArrayList<String>();
+				files = new ArrayList<String>();
 				files.add("-"); // read from stdin
 			}
 
-			String output = (String) parser.getOptionValue(outputFilenameOpt);
-			String pattern[] = output != null ? output.split(":") : new String[0];
+			File output = cfg.getOutputFile();
+//			String pattern[] = output != null ? output.split(":") : new String[0];
 
-			java.util.Iterator<String> filenames = files.iterator();
-			while(filenames.hasNext()) {
-				String inputFilename = (String)filenames.next();
+			for(String inputFilename : files) {
 
 				try {
 					if (inputFilename.equals("-")) {
@@ -102,25 +75,20 @@ public class YUICompressor {
 						if (type == null) {
 							int idx = inputFilename.lastIndexOf('.');
 							if (idx >= 0 && idx < inputFilename.length() - 1) {
-								type = inputFilename.substring(idx + 1);
+								type = TYPE.valueOf(inputFilename.substring(idx + 1).toUpperCase());
 							}
-						}
-
-						if (type == null || !type.equalsIgnoreCase("js") && !type.equalsIgnoreCase("css")) {
-							usage();
-							System.exit(1);
 						}
 
 						in = new InputStreamReader(new FileInputStream(inputFilename), charset);
 					}
 
-					String outputFilename = output;
-					// if a substitution pattern was passed in
-					if (pattern.length > 1 && files.size() > 1) {
-						outputFilename = inputFilename.replaceFirst(pattern[0], pattern[1]);
-					}
+//					String outputFilename = output;
+//					// if a substitution pattern was passed in
+//					if (pattern.length > 1 && files.size() > 1) {
+//						outputFilename = inputFilename.replaceFirst(pattern[0], pattern[1]);
+//					}
 
-					if (type.equalsIgnoreCase("js")) {
+					if (TYPE.JS == type) {
 
 						try {
 
@@ -155,15 +123,15 @@ public class YUICompressor {
 							// in case the output file should override the input file.
 							in.close(); in = null;
 
-							if (outputFilename == null) {
+							if (output == null) {
 								out = new OutputStreamWriter(System.out, charset);
 							} else {
-								out = new OutputStreamWriter(new FileOutputStream(outputFilename), charset);
+								out = new OutputStreamWriter(new FileOutputStream(output), charset);
 							}
 
-							boolean munge = parser.getOptionValue(nomungeOpt) == null;
-							boolean preserveAllSemiColons = parser.getOptionValue(preserveSemiOpt) != null;
-							boolean disableOptimizations = parser.getOptionValue(disableOptimizationsOpt) != null;
+							boolean munge = cfg.isNomunge();
+							boolean preserveAllSemiColons = cfg.isPreserveAllSemiColons();
+							boolean disableOptimizations = cfg.isDisableOptiomizations();
 
 							compressor.compress(out, linebreakpos, munge, verbose,
 									preserveAllSemiColons, disableOptimizations);
@@ -176,7 +144,7 @@ public class YUICompressor {
 
 						}
 
-					} else if (type.equalsIgnoreCase("css")) {
+					} else if (TYPE.CSS == type) {
 
 						CssCompressor compressor = new CssCompressor(in);
 
@@ -184,10 +152,10 @@ public class YUICompressor {
 						// in case the output file should override the input file.
 						in.close(); in = null;
 
-						if (outputFilename == null) {
+						if (output == null) {
 							out = new OutputStreamWriter(System.out, charset);
 						} else {
-							out = new OutputStreamWriter(new FileOutputStream(outputFilename), charset);
+							out = new OutputStreamWriter(new FileOutputStream(output), charset);
 						}
 
 						compressor.compress(out, linebreakpos);
@@ -217,35 +185,10 @@ public class YUICompressor {
 					}
 				}
 			}
-		} catch (CmdLineParser.OptionException e) {
-
-			usage();
-			System.exit(1);
+		} catch (CmdLineException e) {
+			System.err.println(e.getMessage());
+			System.err.println("Usage: java -jar yuicompressor-x.y.z.jar [options] [input file]\n");
+			parser.printUsage(System.err);
 		}
-	}
-
-	private static void usage() {
-		System.err.println(
-				"\nUsage: java -jar yuicompressor-x.y.z.jar [options] [input file]\n\n"
-
-						+ "Global Options\n"
-						+ "  -h, --help                Displays this information\n"
-						+ "  --type <js|css>           Specifies the type of the input file\n"
-						+ "  --charset <charset>       Read the input file using <charset>\n"
-						+ "  --line-break <column>     Insert a line break after the specified column number\n"
-						+ "  -v, --verbose             Display informational messages and warnings\n"
-						+ "  -o <file>                 Place the output into <file>. Defaults to stdout.\n"
-						+ "                            Multiple files can be processed using the following syntax:\n"
-						+ "                            java -jar yuicompressor.jar -o '.css$:-min.css' *.css\n"
-						+ "                            java -jar yuicompressor.jar -o '.js$:-min.js' *.js\n\n"
-
-						+ "JavaScript Options\n"
-						+ "  --nomunge                 Minify only, do not obfuscate\n"
-						+ "  --preserve-semi           Preserve all semicolons\n"
-						+ "  --disable-optimizations   Disable all micro optimizations\n\n"
-
-						+ "If no input file is specified, it defaults to stdin. In this case, the 'type'\n"
-						+ "option is required. Otherwise, the 'type' option is required only if the input\n"
-						+ "file extension is neither 'js' nor 'css'.");
 	}
 }
