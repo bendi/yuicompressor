@@ -55,7 +55,7 @@ public class Config {
 	private boolean preserveAllSemiColons;
 
 	@Option(name="--nomunge", usage="Minify only, do not obfuscate")
-	private boolean nomunge;
+	private boolean munge = true;
 
 	@Option(name="-v", aliases={"--verbose"}, usage="Display informational messages and warnings")
 	private boolean verbose = false;
@@ -136,12 +136,12 @@ public class Config {
 		this.disableOptiomizations = disableOptiomizations;
 	}
 
-	public boolean isNomunge() {
-		return nomunge;
+	public boolean isMunge() {
+		return munge;
 	}
 
-	public void setNomunge(boolean nomunge) {
-		this.nomunge = nomunge;
+	public void setMunge(boolean munge) {
+		this.munge = munge;
 	}
 
 	public boolean isPreserveAllSemiColons() {

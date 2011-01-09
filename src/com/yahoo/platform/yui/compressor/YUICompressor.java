@@ -129,7 +129,7 @@ public class YUICompressor {
 								out = new OutputStreamWriter(new FileOutputStream(output), charset);
 							}
 
-							boolean munge = cfg.isNomunge();
+							boolean munge = cfg.isMunge();
 							boolean preserveAllSemiColons = cfg.isPreserveAllSemiColons();
 							boolean disableOptimizations = cfg.isDisableOptiomizations();
 
